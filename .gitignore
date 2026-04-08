@@ -4,3 +4,8 @@ s3lo-proxy
 *.out
 dist/
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
