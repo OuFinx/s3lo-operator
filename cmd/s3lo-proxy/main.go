@@ -11,7 +11,7 @@ import (
 
 	"github.com/OuFinx/s3lo-operator/pkg/proxy"
 	"github.com/OuFinx/s3lo-operator/pkg/setup"
-	s3client "github.com/finx/s3lo/pkg/s3"
+	s3client "github.com/OuFinx/s3lo/pkg/s3"
 )
 
 func main() {

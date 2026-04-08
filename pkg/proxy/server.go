@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	s3client "github.com/finx/s3lo/pkg/s3"
+	s3client "github.com/OuFinx/s3lo/pkg/s3"
 )
 
 // NewServer creates an HTTP server with OCI Distribution API routes.

@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/finx/s3lo/pkg/oci"
-	s3client "github.com/finx/s3lo/pkg/s3"
+	"github.com/OuFinx/s3lo/pkg/oci"
+	s3client "github.com/OuFinx/s3lo/pkg/s3"
 )
 
 // Handlers implements OCI Distribution API endpoints backed by S3.
