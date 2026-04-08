@@ -47,5 +47,3 @@ require (
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 )
-
-replace github.com/OuFinx/s3lo => /Users/finx/Work/Other/vibe/s3lo
