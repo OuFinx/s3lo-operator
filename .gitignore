@@ -1,0 +1,6 @@
+s3lo-proxy
+*.exe
+*.test
+*.out
+dist/
+.DS_Store
