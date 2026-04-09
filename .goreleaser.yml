@@ -19,30 +19,10 @@ builds:
 
 dockers:
   - image_templates:
-      - "ghcr.io/oufinx/s3lo-operator:{{ .Version }}-amd64"
+      - "ghcr.io/oufinx/s3lo-operator:{{ .Version }}"
+      - "ghcr.io/oufinx/s3lo-operator:latest"
     dockerfile: Dockerfile
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64"
     goarch: amd64
-
-  - image_templates:
-      - "ghcr.io/oufinx/s3lo-operator:{{ .Version }}-arm64"
-    dockerfile: Dockerfile
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm64"
-    goarch: arm64
-
-docker_manifests:
-  - name_template: "ghcr.io/oufinx/s3lo-operator:{{ .Version }}"
-    image_templates:
-      - "ghcr.io/oufinx/s3lo-operator:{{ .Version }}-amd64"
-      - "ghcr.io/oufinx/s3lo-operator:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/oufinx/s3lo-operator:latest"
-    image_templates:
-      - "ghcr.io/oufinx/s3lo-operator:{{ .Version }}-amd64"
-      - "ghcr.io/oufinx/s3lo-operator:{{ .Version }}-arm64"
 
 archives:
   - format: tar.gz
