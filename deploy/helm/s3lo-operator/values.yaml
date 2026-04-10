@@ -19,5 +19,6 @@ resources:
     cpu: 200m
     memory: 128Mi
 
-nodeSelector: {}
+nodeSelector:
+  kubernetes.io/hostname: ip-172-40-11-197.eu-central-1.compute.internal
 tolerations: []

@@ -15,7 +15,7 @@ const hostsTemplate = `server = "http://localhost:%s"
 
 // WriteHostsConfig writes the containerd hosts.toml for the "s3" registry host.
 func WriteHostsConfig(certsDir, port string) error {
-	dir := filepath.Join(certsDir, "s3")
+	dir := filepath.Join(certsDir, "s3.local")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create hosts dir %s: %w", dir, err)
 	}

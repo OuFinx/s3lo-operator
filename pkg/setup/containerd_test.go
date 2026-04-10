@@ -15,7 +15,7 @@ func TestWriteHostsConfig(t *testing.T) {
 		t.Fatalf("WriteHostsConfig failed: %v", err)
 	}
 
-	hostsFile := filepath.Join(tmpDir, "s3", "hosts.toml")
+	hostsFile := filepath.Join(tmpDir, "s3.local", "hosts.toml")
 	data, err := os.ReadFile(hostsFile)
 	if err != nil {
 		t.Fatalf("hosts.toml not created: %v", err)
@@ -41,7 +41,7 @@ func TestWriteHostsConfig_CreatesDirectory(t *testing.T) {
 		t.Fatalf("WriteHostsConfig failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(certsDir, "s3", "hosts.toml")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(certsDir, "s3.local", "hosts.toml")); os.IsNotExist(err) {
 		t.Fatal("hosts.toml not created in new directory")
 	}
 }
