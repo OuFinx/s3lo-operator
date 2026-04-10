@@ -177,7 +177,7 @@ image: s3.local/my-bucket/org/frontend:sha-abc123
 │  └──────────┘    │  ┌──────────────────┐  │  │
 │                  │  │ hosts.toml       │  │  │
 │                  │  │ s3.local →       │  │  │
-│                  │  │  localhost:5732   │  │  │
+│                  │  │  localhost:5732  │  │  │
 │                  │  └────────┬─────────┘  │  │
 │                  └───────────┼────────────┘  │
 │                              │               │
