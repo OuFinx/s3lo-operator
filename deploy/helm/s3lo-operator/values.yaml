@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/oufinx/s3lo-operator
-  tag: "0.0.2"
+  tag: "0.0.3"
   pullPolicy: IfNotPresent
 
 proxy:
@@ -19,6 +19,5 @@ resources:
     cpu: 200m
     memory: 128Mi
 
-nodeSelector:
-  kubernetes.io/hostname: ip-172-40-11-197.eu-central-1.compute.internal
+nodeSelector: {}
 tolerations: []
