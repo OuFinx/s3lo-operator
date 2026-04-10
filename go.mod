@@ -3,7 +3,7 @@ module github.com/OuFinx/s3lo-operator
 go 1.26.2
 
 require (
-	github.com/OuFinx/s3lo v1.0.0
+	github.com/OuFinx/s3lo v1.1.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.99.0
 )
 
