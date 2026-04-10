@@ -245,6 +245,10 @@ image: s3/my-bucket/myapp:v1.0
 image: s3.local/my-bucket/myapp:v1.0
 ```
 
+## Documentation
+
+See [GUIDE.md](GUIDE.md) for the full reference: proxy architecture, OCI Distribution API, containerd integration, Helm values, AWS setup (Pod Identity and IRSA), v1.0.0/v1.1.0 compatibility, troubleshooting, and FAQ.
+
 ## See Also
 
 - [s3lo](https://github.com/OuFinx/s3lo) — CLI tool for pushing/pulling images to S3
