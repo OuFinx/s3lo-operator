@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"log"
@@ -42,6 +43,18 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If ref is a digest, try to serve from cache
+	if strings.HasPrefix(ref, "sha256:") {
+		if data, ok := h.cache.GetManifest(ref); ok {
+			h.serveManifest(w, data, ref)
+			return
+		}
+		// Digest not in cache — can't resolve without tag
+		log.Printf("Manifest not in cache for digest: %s", ref)
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
 	ctx := r.Context()
 	s3c, err := h.s3.ClientForBucket(ctx, bucket)
 	if err != nil {
@@ -69,6 +82,10 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Compute manifest digest and cache it
+	digest := fmt.Sprintf("sha256:%x", sha256.Sum256(manifestData))
+	h.cache.PutManifest(digest, manifestData)
+
 	// Parse manifest to cache blob digests → S3 keys
 	manifest, err := oci.ParseManifest(manifestData)
 	if err == nil {
@@ -79,10 +96,15 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.serveManifest(w, manifestData, digest)
+}
+
+func (h *Handlers) serveManifest(w http.ResponseWriter, data []byte, digest string) {
 	w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(manifestData)))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	w.Header().Set("Docker-Content-Digest", digest)
 	w.WriteHeader(http.StatusOK)
-	w.Write(manifestData)
+	w.Write(data)
 }
 
 // HandleBlob handles GET /v2/<bucket>/<image>/blobs/<digest>
