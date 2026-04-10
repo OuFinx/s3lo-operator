@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/oufinx/s3lo-operator
-  tag: ""
+  tag: "0.0.1"
   pullPolicy: IfNotPresent
 
 proxy:

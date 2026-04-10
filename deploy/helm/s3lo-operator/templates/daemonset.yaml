@@ -21,6 +21,8 @@ spec:
       containers:
         - name: s3lo-proxy
           image: {{ include "s3lo-operator.image" . }}
+          securityContext:
+            runAsUser: 0
           env:
             - name: S3LO_PORT
               value: {{ .Values.proxy.port | quote }}
