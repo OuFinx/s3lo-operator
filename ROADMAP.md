@@ -1,10 +1,10 @@
 # s3lo-operator Roadmap
 
-## v1.1.0 — Global Layer Deduplication
+## v1.1.0 — Global Layer Deduplication ✓
 
-- [ ] Resolve blobs from global bucket-level path (`bucket/blobs/sha256/`)
-- [ ] Fallback to v1.0.0 layout for backward compatibility
-- [ ] Meaningful OCI error messages for missing images
+- [x] Resolve blobs from global bucket-level path (`bucket/blobs/sha256/`)
+- [x] Fallback to v1.0.0 layout for backward compatibility
+- [x] Meaningful OCI error messages for missing images
 
 ## v1.2.0 — Multi-Architecture Images
 
