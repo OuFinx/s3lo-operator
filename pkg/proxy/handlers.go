@@ -3,6 +3,8 @@ package proxy
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/OuFinx/s3lo/pkg/oci"
 	s3client "github.com/OuFinx/s3lo/pkg/s3"
 )
@@ -36,6 +39,8 @@ func (h *Handlers) HandleV2(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleManifest handles GET /v2/<bucket>/<image>/manifests/<ref>
+// Tries v1.1.0 layout (manifests/<image>/<ref>/manifest.json) first,
+// falls back to v1.0.0 (<image>/<ref>/manifest.json) on 404.
 func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 	bucket, image, ref, err := parseManifestPath(r.URL.Path)
 	if err != nil {
@@ -43,15 +48,16 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If ref is a digest, try to serve from cache
+	// Digest ref: serve from cache (set on first tag-based fetch).
 	if strings.HasPrefix(ref, "sha256:") {
 		if data, ok := h.cache.GetManifest(ref); ok {
 			h.serveManifest(w, data, ref)
 			return
 		}
-		// Digest not in cache — can't resolve without tag
-		log.Printf("Manifest not in cache for digest: %s", ref)
-		http.Error(w, "not found", http.StatusNotFound)
+		log.Printf("manifest digest not in cache: %s", ref)
+		writeOCIError(w, http.StatusNotFound, "MANIFEST_UNKNOWN",
+			"manifest unknown",
+			fmt.Sprintf("digest %s not in cache — pull by tag first", ref))
 		return
 	}
 
@@ -63,36 +69,46 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch manifest from S3
-	key := image + "/" + ref + "/manifest.json"
-	resp, err := s3c.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: &bucket,
-		Key:    &key,
-	})
+	// Try v1.1.0: manifests/<image>/<ref>/manifest.json
+	v110Key := "manifests/" + image + "/" + ref + "/manifest.json"
+	manifestData, err := getS3Object(ctx, s3c, bucket, v110Key)
+	isV110 := true
 	if err != nil {
-		log.Printf("S3 GetObject %s/%s: %v", bucket, key, err)
-		http.Error(w, "not found", http.StatusNotFound)
-		return
+		if !isNotFound(err) {
+			log.Printf("S3 GetObject %s/%s: %v", bucket, v110Key, err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		// Fallback to v1.0.0: <image>/<ref>/manifest.json
+		isV110 = false
+		v100Key := image + "/" + ref + "/manifest.json"
+		manifestData, err = getS3Object(ctx, s3c, bucket, v100Key)
+		if err != nil {
+			if isNotFound(err) {
+				writeOCIError(w, http.StatusNotFound, "MANIFEST_UNKNOWN",
+					fmt.Sprintf("image not found in S3: s3://%s/%s:%s", bucket, image, ref),
+					fmt.Sprintf("tried s3://%s/%s and s3://%s/%s", bucket, v110Key, bucket, v100Key))
+				return
+			}
+			log.Printf("S3 GetObject %s/%s: %v", bucket, v100Key, err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 	}
-	defer resp.Body.Close()
 
-	manifestData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
-		return
-	}
-
-	// Compute manifest digest and cache it
 	digest := fmt.Sprintf("sha256:%x", sha256.Sum256(manifestData))
 	h.cache.PutManifest(digest, manifestData)
 
-	// Parse manifest to cache blob digests → S3 keys
-	manifest, err := oci.ParseManifest(manifestData)
-	if err == nil {
-		prefix := image + "/" + ref + "/blobs/sha256/"
-		h.cache.Put(manifest.Config.Digest.String(), bucket, prefix+manifest.Config.Digest.Encoded())
-		for _, layer := range manifest.Layers {
-			h.cache.Put(layer.Digest.String(), bucket, prefix+layer.Digest.Encoded())
+	// For v1.0.0 images, cache explicit blob paths (needed by HandleBlob fallback).
+	// For v1.1.0 images, blob paths are deterministic from digest — no cache needed.
+	if !isV110 {
+		manifest, err := oci.ParseManifest(manifestData)
+		if err == nil {
+			prefix := image + "/" + ref + "/blobs/sha256/"
+			h.cache.Put(manifest.Config.Digest.String(), bucket, prefix+manifest.Config.Digest.Encoded())
+			for _, layer := range manifest.Layers {
+				h.cache.Put(layer.Digest.String(), bucket, prefix+layer.Digest.Encoded())
+			}
 		}
 	}
 
@@ -108,34 +124,55 @@ func (h *Handlers) serveManifest(w http.ResponseWriter, data []byte, digest stri
 }
 
 // HandleBlob handles GET /v2/<bucket>/<image>/blobs/<digest>
+// Tries v1.1.0 global path (blobs/sha256/<encoded>) first,
+// falls back to v1.0.0 per-tag path via cache on 404.
 func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
-	_, digest, err := parseBlobPath(r.URL.Path)
+	bucket, digest, err := parseBlobPath(r.URL.Path)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	loc, ok := h.cache.Get(digest)
-	if !ok {
-		log.Printf("Blob not in cache: %s", digest)
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
 	ctx := r.Context()
-	s3c, err := h.s3.ClientForBucket(ctx, loc.Bucket)
+	s3c, err := h.s3.ClientForBucket(ctx, bucket)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
+	encoded := strings.TrimPrefix(digest, "sha256:")
+	fetchBucket := bucket
+	key := "blobs/sha256/" + encoded
+
 	resp, err := s3c.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: &loc.Bucket,
-		Key:    &loc.Key,
+		Bucket: &fetchBucket,
+		Key:    &key,
 	})
+	if isNotFound(err) {
+		// v1.0.0 fallback: look up per-tag blob path from cache.
+		loc, ok := h.cache.Get(digest)
+		if !ok {
+			log.Printf("blob not found: %s (not in v1.1.0 global store or v1.0.0 cache)", digest)
+			writeOCIError(w, http.StatusNotFound, "BLOB_UNKNOWN",
+				"blob not found in S3",
+				fmt.Sprintf("digest %s not found at blobs/sha256/%s and not in cache", digest, encoded))
+			return
+		}
+		fetchBucket = loc.Bucket
+		key = loc.Key
+		s3c, err = h.s3.ClientForBucket(ctx, fetchBucket)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		resp, err = s3c.GetObject(ctx, &s3.GetObjectInput{
+			Bucket: &fetchBucket,
+			Key:    &key,
+		})
+	}
 	if err != nil {
-		log.Printf("S3 GetObject %s/%s: %v", loc.Bucket, loc.Key, err)
-		http.Error(w, "not found", http.StatusNotFound)
+		log.Printf("S3 GetObject %s/%s: %v", fetchBucket, key, err)
+		writeOCIError(w, http.StatusNotFound, "BLOB_UNKNOWN", "blob not found in S3", digest)
 		return
 	}
 	defer resp.Body.Close()
@@ -152,6 +189,50 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
+}
+
+// writeOCIError writes an OCI Distribution API compliant error response.
+func writeOCIError(w http.ResponseWriter, status int, code, message, detail string) {
+	type ociError struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Detail  string `json:"detail"`
+	}
+	body, _ := json.Marshal(map[string][]ociError{
+		"errors": {{Code: code, Message: message, Detail: detail}},
+	})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(body)
+}
+
+// isNotFound returns true if the error is an S3 NoSuchKey or HTTP 404.
+func isNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var noSuchKey *s3types.NoSuchKey
+	if errors.As(err, &noSuchKey) {
+		return true
+	}
+	var re interface{ HTTPStatusCode() int }
+	if errors.As(err, &re) && re.HTTPStatusCode() == http.StatusNotFound {
+		return true
+	}
+	return false
+}
+
+// getS3Object fetches an S3 object and returns its body as bytes.
+func getS3Object(ctx context.Context, client *s3.Client, bucket, key string) ([]byte, error) {
+	resp, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
 }
 
 // parseManifestPath parses /v2/<bucket>/<image...>/manifests/<ref>
@@ -206,6 +287,3 @@ func parseBlobPath(path string) (bucket, digest string, err error) {
 
 	return bucket, digest, nil
 }
-
-// ensure context is used (avoid import error if not used elsewhere)
-var _ = context.Background
