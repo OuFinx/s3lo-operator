@@ -28,6 +28,14 @@ spec:
               value: {{ .Values.proxy.port | quote }}
             - name: S3LO_CERTS_DIR
               value: /host/etc/containerd/certs.d
+            - name: S3LO_PRESIGN_TTL
+              value: {{ .Values.proxy.presignTTL | quote }}
+            {{- if .Values.signing.enabled }}
+            - name: S3LO_VERIFY_SIGNATURES
+              value: "true"
+            - name: S3LO_KEY_REF
+              value: {{ .Values.signing.keyRef | quote }}
+            {{- end }}
           ports:
             - containerPort: {{ .Values.proxy.port }}
               hostPort: {{ .Values.proxy.port }}
@@ -49,11 +57,24 @@ spec:
           volumeMounts:
             - name: containerd-certs
               mountPath: /host/etc/containerd/certs.d
+            {{- if and .Values.signing.enabled .Values.signing.keySecret.name }}
+            - name: signing-key
+              mountPath: /etc/s3lo/signing
+              readOnly: true
+            {{- end }}
       volumes:
         - name: containerd-certs
           hostPath:
             path: /etc/containerd/certs.d
             type: DirectoryOrCreate
+        {{- if and .Values.signing.enabled .Values.signing.keySecret.name }}
+        - name: signing-key
+          secret:
+            secretName: {{ .Values.signing.keySecret.name }}
+            items:
+              - key: {{ .Values.signing.keySecret.key }}
+                path: {{ .Values.signing.keySecret.key }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
