@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -371,9 +370,6 @@ func TestWriteOCIError(t *testing.T) {
 }
 
 func TestMediaTypeFromManifest(t *testing.T) {
-	digest := fmt.Sprintf("sha256:%x", sha256.Sum256(singleManifestJSON))
-	_ = digest // used to silence unused import
-
 	tests := []struct {
 		data []byte
 		want string

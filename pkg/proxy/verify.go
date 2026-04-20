@@ -12,13 +12,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 
-	cosign "github.com/sigstore/cosign/v2/pkg/cosign"
 	cosignsig "github.com/sigstore/cosign/v2/pkg/signature"
 	sigsig "github.com/sigstore/sigstore/pkg/signature"
 	_ "github.com/sigstore/sigstore/pkg/signature/kms/aws" // register AWS KMS provider
+
+	"github.com/OuFinx/s3lo/pkg/storage"
 )
 
 // signatureRecord mirrors the JSON stored by s3lo sign at
@@ -96,7 +96,7 @@ func (v *Verifier) Check(ctx context.Context, s objectGetter, bucket, image, ref
 	sigKey := "manifests/" + image + "/" + ref + "/signatures/" + v.slug + ".json"
 	sigData, err := s.GetObject(ctx, bucket, sigKey)
 	if err != nil {
-		if isNotFoundMessage(err) {
+		if storage.IsNotFound(err) {
 			return fmt.Errorf("%w: %s", ErrNotSigned, sigKey)
 		}
 		return fmt.Errorf("read signature: %w", err)
@@ -138,15 +138,3 @@ func keyIDSlug(pub crypto.PublicKey) (string, error) {
 	return hex.EncodeToString(sum[:])[:16], nil
 }
 
-// isNotFoundMessage checks whether an error message indicates a missing object.
-// Matches error strings produced by storage.Client and fakeStorage.
-func isNotFoundMessage(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "NoSuchKey") || strings.Contains(msg, "object not found:")
-}
-
-// Ensure cosign and PassFunc are referenced to keep the import.
-var _ cosign.PassFunc = nil
