@@ -9,7 +9,7 @@
 ## v1.2.0 — Multi-Architecture Images ✓
 
 - [x] Serve OCI Image Index for multi-arch images
-- [x] Handle Accept header for manifest content negotiation
+- [ ] Handle Accept header for manifest content negotiation
 
 ## v1.3.0 — Pull-Through Cache
 
