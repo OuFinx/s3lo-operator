@@ -180,7 +180,12 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 		fetchBucket = loc.Bucket
 		key = loc.Key
 		exists, err = h.s3.HeadObjectExists(ctx, fetchBucket, key)
-		if err != nil || !exists {
+		if err != nil {
+			log.Printf("HeadObject (v1.0.0 fallback) %s/%s: %v", fetchBucket, key, err)
+			writeOCIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "storage error", "")
+			return
+		}
+		if !exists {
 			writeOCIError(w, http.StatusNotFound, "BLOB_UNKNOWN", "blob not found in S3", digest)
 			return
 		}
@@ -199,7 +204,7 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 		writeOCIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "presign failed", "")
 		return
 	}
-	http.Redirect(w, r, url, http.StatusSeeOther)
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
 // HandleHealth handles GET /healthz and /readyz

@@ -218,8 +218,8 @@ func TestHandleBlob_GET_PresignRedirect(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.HandleBlob(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("status = %d, want %d (307)", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want 307 (Temporary Redirect)", rec.Code)
 	}
 	if loc := rec.Header().Get("Location"); loc != "https://s3.example.com/presigned" {
 		t.Errorf("Location = %q, want presigned URL", loc)
@@ -273,8 +273,8 @@ func TestHandleBlob_V100FallbackFromCache(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.HandleBlob(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("status = %d, want 307", rec.Code)
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want 307 (Temporary Redirect)", rec.Code)
 	}
 }
 
