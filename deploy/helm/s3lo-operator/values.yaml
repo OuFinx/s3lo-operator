@@ -5,6 +5,14 @@ image:
 
 proxy:
   port: 5732
+  presignTTL: "1h"
+
+signing:
+  enabled: false
+  keyRef: ""       # awskms:// ARN, gcpkms:// URL, or mounted file path
+  keySecret:
+    name: ""       # name of an existing K8s Secret holding the public key
+    key: "key.pub" # key name within that secret
 
 serviceAccount:
   create: true

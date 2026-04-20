@@ -4,10 +4,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestServerRouting(t *testing.T) {
-	srv := NewServer(nil, "5732")
+	srv := NewServer(nil, "5732", time.Hour, nil)
 
 	tests := []struct {
 		method string

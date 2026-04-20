@@ -6,9 +6,9 @@
 - [x] Fallback to v1.0.0 layout for backward compatibility
 - [x] Meaningful OCI error messages for missing images
 
-## v1.2.0 — Multi-Architecture Images
+## v1.2.0 — Multi-Architecture Images ✓
 
-- [ ] Serve OCI Image Index for multi-arch images
+- [x] Serve OCI Image Index for multi-arch images
 - [ ] Handle Accept header for manifest content negotiation
 
 ## v1.3.0 — Pull-Through Cache
@@ -29,9 +29,9 @@
 
 - [ ] Publish Helm chart to GHCR as OCI artifact
 
-## v2.0.0 — Security
+## v2.0.0 — Security ✓
 
-- [ ] Verify image signatures before serving
+- [x] Verify image signatures before serving
 
 ## v2.1.0 — Multi-Platform Kubernetes
 
