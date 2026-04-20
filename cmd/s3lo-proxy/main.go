@@ -36,7 +36,21 @@ func main() {
 		log.Fatalf("Failed to create S3 client: %v", err)
 	}
 
-	srv := proxy.NewServer(client, port, presignTTL)
+	var verifier *proxy.Verifier
+	if os.Getenv("S3LO_VERIFY_SIGNATURES") == "true" {
+		keyRef := os.Getenv("S3LO_KEY_REF")
+		if keyRef == "" {
+			log.Fatal("S3LO_KEY_REF must be set when S3LO_VERIFY_SIGNATURES=true")
+		}
+		v, err := proxy.NewVerifier(ctx, keyRef)
+		if err != nil {
+			log.Fatalf("Failed to load signing key %q: %v", keyRef, err)
+		}
+		verifier = v
+		log.Printf("Signature verification enabled (key: %s)", keyRef)
+	}
+
+	srv := proxy.NewServer(client, port, presignTTL, verifier)
 
 	go func() {
 		log.Printf("Starting s3lo-proxy on :%s", port)

@@ -7,8 +7,9 @@ import (
 )
 
 // NewServer creates an HTTP server with OCI Distribution API routes.
-func NewServer(client storageClient, port string, presignTTL time.Duration) *http.Server {
+func NewServer(client storageClient, port string, presignTTL time.Duration, verifier *Verifier) *http.Server {
 	h := NewHandlers(client, presignTTL)
+	h.verifier = verifier
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {

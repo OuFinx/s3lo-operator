@@ -390,3 +390,62 @@ func TestMediaTypeFromManifest(t *testing.T) {
 		}
 	}
 }
+
+func TestHandleManifest_VerificationEnabled_Valid(t *testing.T) {
+	priv, pub := makeTestKey(t)
+	s := newFakeStorage()
+	s.put("my-bucket", "manifests/myapp/v1.0/manifest.json", singleManifestJSON)
+
+	v := makeVerifier(t, pub)
+	putSignature(t, s, v, priv, "my-bucket", "myapp", "v1.0", singleManifestJSON)
+
+	h := NewHandlers(s, time.Hour)
+	h.verifier = v
+
+	req := httptest.NewRequest("GET", "/v2/my-bucket/myapp/manifests/v1.0", nil)
+	rec := httptest.NewRecorder()
+	h.HandleManifest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestHandleManifest_VerificationEnabled_Unsigned(t *testing.T) {
+	_, pub := makeTestKey(t)
+	s := newFakeStorage()
+	s.put("my-bucket", "manifests/myapp/v1.0/manifest.json", singleManifestJSON)
+
+	h := NewHandlers(s, time.Hour)
+	h.verifier = makeVerifier(t, pub)
+
+	req := httptest.NewRequest("GET", "/v2/my-bucket/myapp/manifests/v1.0", nil)
+	rec := httptest.NewRecorder()
+	h.HandleManifest(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d (unsigned image must be rejected)", rec.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(rec.Body.String(), "DENIED") {
+		t.Errorf("expected DENIED in body, got: %s", rec.Body.String())
+	}
+}
+
+func TestHandleManifest_VerificationEnabled_DigestSkipsVerify(t *testing.T) {
+	// Digest-based requests (index children) must skip verification.
+	_, pub := makeTestKey(t)
+	s := newFakeStorage()
+	s.put("my-bucket", "blobs/sha256/cafebabe", singleManifestJSON)
+
+	h := NewHandlers(s, time.Hour)
+	h.verifier = makeVerifier(t, pub) // verifier set but no signature stored
+
+	req := httptest.NewRequest("GET", "/v2/my-bucket/myapp/manifests/sha256:cafebabe", nil)
+	rec := httptest.NewRecorder()
+	h.HandleManifest(rec, req)
+
+	// Must succeed — digest-based pulls are follow-ups to already-verified tag pulls.
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d; digest pull must bypass verification", rec.Code, http.StatusOK)
+	}
+}

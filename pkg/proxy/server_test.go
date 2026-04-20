@@ -8,7 +8,7 @@ import (
 )
 
 func TestServerRouting(t *testing.T) {
-	srv := NewServer(nil, "5732", time.Hour)
+	srv := NewServer(nil, "5732", time.Hour, nil)
 
 	tests := []struct {
 		method string

@@ -27,6 +27,7 @@ type Handlers struct {
 	s3         storageClient
 	cache      *DigestCache
 	presignTTL time.Duration
+	verifier   *Verifier // nil means verification disabled
 }
 
 // NewHandlers creates new OCI API handlers.
@@ -111,6 +112,15 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 			for _, layer := range manifest.Layers {
 				h.cache.Put(layer.Digest.String(), bucket, prefix+layer.Digest.Encoded())
 			}
+		}
+	}
+
+	// Signature verification — only for tag-based requests; digest pulls are follow-ups.
+	if h.verifier != nil {
+		if err := h.verifier.Check(ctx, h.s3, bucket, image, ref, manifestData); err != nil {
+			writeOCIError(w, http.StatusForbidden, "DENIED",
+				"image not permitted: invalid or missing signature", err.Error())
+			return
 		}
 	}
 
