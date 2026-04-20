@@ -3,13 +3,12 @@ package proxy
 import (
 	"net/http"
 	"strings"
-
-	s3client "github.com/OuFinx/s3lo/pkg/s3"
+	"time"
 )
 
 // NewServer creates an HTTP server with OCI Distribution API routes.
-func NewServer(client *s3client.Client, port string) *http.Server {
-	h := NewHandlers(client)
+func NewServer(client storageClient, port string) *http.Server {
+	h := NewHandlers(client, 15*time.Minute)
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
