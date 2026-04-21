@@ -44,7 +44,7 @@ s3lo push myapp:v1.0 s3://my-bucket/myapp:v1.0
 helm install s3lo-operator deploy/helm/s3lo-operator \
   --namespace s3lo \
   --create-namespace \
-  --set image.tag=1.0.0
+  --set image.tag=1.3.0
 ```
 
 ### 4. Configure AWS Access
@@ -147,10 +147,10 @@ image: s3.local/my-bucket/org/frontend:sha-abc123
 
 ## Prerequisites
 
-- EKS cluster with containerd 1.5+ (EKS 1.24+)
-- containerd `config_path` includes `/etc/containerd/certs.d` (EKS default)
-- S3 bucket with images pushed via [s3lo](https://github.com/OuFinx/s3lo)
-- EKS Pod Identity for S3 access
+- Kubernetes cluster with containerd 1.5+ (EKS, GKE, AKS, k3s, or any S3-compatible store)
+- containerd `config_path` includes `/etc/containerd/certs.d`
+- S3 bucket (or S3-compatible: Minio, Ceph, GCS via HMAC) with images pushed via [s3lo](https://github.com/OuFinx/s3lo)
+- AWS credentials via EKS Pod Identity, IRSA, or a Kubernetes Secret (for non-EKS)
 
 ## Helm Configuration
 
@@ -159,8 +159,21 @@ image: s3.local/my-bucket/org/frontend:sha-abc123
 | `image.repository` | Docker image | `ghcr.io/oufinx/s3lo-operator` |
 | `image.tag` | Image tag | Chart appVersion |
 | `proxy.port` | Proxy listen port | `5732` |
+| `proxy.presignTTL` | S3 presigned URL TTL | `1h` |
+| `metrics.enabled` | Enable Prometheus metrics Service | `true` |
+| `metrics.port` | Metrics server port (`/metrics`) | `9090` |
+| `cache.maxEntries` | Max in-memory manifest cache entries | `10000` |
+| `cache.dir` | Disk cache directory (empty = disabled) | `""` |
+| `cache.ttl` | Disk cache TTL | `24h` |
+| `rateLimit.s3MaxConcurrent` | Max concurrent S3 API calls | `20` |
+| `readiness.healthBucket` | Bucket for S3 readiness check (empty = skip) | `""` |
+| `storage.endpoint` | Custom S3 endpoint URL (for Minio, GCS, etc.) | `""` |
+| `storage.region` | AWS region override | `""` |
+| `storage.credentialsSecret.name` | K8s Secret with `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | `""` |
+| `signing.enabled` | Enforce cosign signature verification | `false` |
+| `signing.keyRef` | Public key reference (KMS ARN or file path) | `""` |
 | `serviceAccount.name` | ServiceAccount name | `s3lo-proxy` |
-| `serviceAccount.annotations` | SA annotations (for IRSA if needed) | `{}` |
+| `serviceAccount.annotations` | SA annotations (for IRSA/Pod Identity) | `{}` |
 | `resources.requests.cpu` | CPU request | `50m` |
 | `resources.requests.memory` | Memory request | `64Mi` |
 | `nodeSelector` | Node selector | `{}` |
