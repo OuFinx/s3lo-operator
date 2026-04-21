@@ -173,6 +173,7 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !strings.HasPrefix(digest, "sha256:") {
+		h.metrics.incBlob("error")
 		writeOCIError(w, http.StatusNotFound, "BLOB_UNKNOWN", "blob unknown", digest)
 		return
 	}
@@ -196,6 +197,7 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 		// v1.0.0 fallback: resolve from digest cache populated by HandleManifest.
 		loc, ok := h.cache.Get(digest)
 		if !ok {
+			h.metrics.incBlob("error")
 			writeOCIError(w, http.StatusNotFound, "BLOB_UNKNOWN",
 				"blob not found in S3",
 				fmt.Sprintf("digest %s not at blobs/sha256/%s and not in v1.0.0 cache", digest, encoded))
@@ -212,6 +214,7 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !exists {
+			h.metrics.incBlob("error")
 			writeOCIError(w, http.StatusNotFound, "BLOB_UNKNOWN", "blob not found in S3", digest)
 			return
 		}

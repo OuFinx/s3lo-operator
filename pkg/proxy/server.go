@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -73,9 +74,9 @@ func NewServer(client storageClient, cfg ServerConfig) *http.Server {
 }
 
 // NewMetricsServer creates an HTTP server serving /metrics for Prometheus scraping.
-func NewMetricsServer(port string) *http.Server {
+func NewMetricsServer(port string, g prometheus.Gatherer) *http.Server {
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.HandlerFor(g, promhttp.HandlerOpts{}))
 	return &http.Server{
 		Addr:    ":" + port,
 		Handler: mux,

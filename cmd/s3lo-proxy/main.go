@@ -66,7 +66,8 @@ func main() {
 	}
 
 	metricsPort := envOr("S3LO_METRICS_PORT", "9090")
-	metrics := proxy.NewMetrics(prometheus.DefaultRegisterer)
+	reg := prometheus.NewRegistry()
+	metrics := proxy.NewMetrics(reg)
 
 	srv := proxy.NewServer(client, proxy.ServerConfig{
 		Port:            port,
@@ -77,7 +78,7 @@ func main() {
 		Verifier:        verifier,
 		Metrics:         metrics,
 	})
-	metricsSrv := proxy.NewMetricsServer(metricsPort)
+	metricsSrv := proxy.NewMetricsServer(metricsPort, reg)
 
 	go func() {
 		log.Printf("s3lo-proxy listening on :%s", port)
