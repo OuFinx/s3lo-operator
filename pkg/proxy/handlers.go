@@ -84,16 +84,28 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Digest ref: check cache then fall back to blobs/ (index children stored by s3lo v1.3.0+).
+	// Cache hit for digest refs requires no S3 call — skip rate limit.
 	if strings.HasPrefix(ref, "sha256:") {
 		if data, ok := h.cache.GetManifest(ref); ok {
 			h.metrics.incManifest("cache")
 			h.serveManifest(w, r, data)
 			return
 		}
+	}
+
+	ctx := r.Context()
+
+	if err := h.sem.acquire(ctx); err != nil {
+		writeOCIError(w, http.StatusServiceUnavailable, "UNAVAILABLE", "rate limited", "")
+		return
+	}
+	defer h.sem.release()
+
+	// Digest ref cache miss: fall back to blobs/ path on S3.
+	if strings.HasPrefix(ref, "sha256:") {
 		encoded := strings.TrimPrefix(ref, "sha256:")
 		h.metrics.incS3("manifest_get")
-		data, err := h.s3.GetObject(r.Context(), bucket, "blobs/sha256/"+encoded)
+		data, err := h.s3.GetObject(ctx, bucket, "blobs/sha256/"+encoded)
 		if err == nil {
 			h.cache.PutManifest(ref, data)
 			h.metrics.incManifest("s3")
@@ -105,14 +117,6 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("digest %s not in cache and not found at blobs/sha256/%s", ref, encoded))
 		return
 	}
-
-	ctx := r.Context()
-
-	if err := h.sem.acquire(ctx); err != nil {
-		writeOCIError(w, http.StatusServiceUnavailable, "UNAVAILABLE", "rate limited", "")
-		return
-	}
-	defer h.sem.release()
 
 	// Try v1.1.0 layout: manifests/<image>/<ref>/manifest.json
 	v110Key := "manifests/" + image + "/" + ref + "/manifest.json"

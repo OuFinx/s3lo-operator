@@ -564,3 +564,28 @@ func TestHandleManifest_RateLimitExceeded(t *testing.T) {
 		t.Errorf("status = %d, want 503 when semaphore full", rec.Code)
 	}
 }
+
+func TestHandleManifest_DigestRateLimitExceeded(t *testing.T) {
+	s := newFakeStorage()
+	// No file set — any S3 call would fail anyway; rate limit fires first.
+	h := NewHandlers(s, time.Hour)
+	h.sem = newSemaphore(1)
+
+	// Fill the semaphore.
+	if err := h.sem.acquire(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer h.sem.release()
+
+	// Digest ref that is not in cache — must reach semaphore acquire before GetObject.
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest("GET", "/v2/my-bucket/myapp/manifests/sha256:deadbeef", nil)
+	req = req.WithContext(cancelCtx)
+	rec := httptest.NewRecorder()
+	h.HandleManifest(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 for digest ref when semaphore full", rec.Code)
+	}
+}
