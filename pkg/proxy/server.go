@@ -11,17 +11,35 @@ import (
 type ServerConfig struct {
 	Port            string
 	PresignTTL      time.Duration
-	CacheMaxEntries int           // 0 → default 10000; wired in Task 2
-	CacheDir        string        // "" → no disk cache; wired in Task 2
-	CacheTTL        time.Duration // 0 → default 24h; wired in Task 2
-	S3MaxConcurrent int           // 0 → no rate limit; wired in Task 5
-	HealthBucket    string        // "" → no S3 readiness check; wired in Task 6
+	CacheMaxEntries int
+	CacheDir        string
+	CacheTTL        time.Duration
+	S3MaxConcurrent int
+	HealthBucket    string
 	Verifier        *Verifier
+}
+
+// newHandlersWithCache creates handlers using a pre-configured DigestCache.
+func newHandlersWithCache(client storageClient, cache *DigestCache, presignTTL time.Duration) *Handlers {
+	return &Handlers{
+		s3:         client,
+		cache:      cache,
+		presignTTL: presignTTL,
+	}
 }
 
 // NewServer creates the OCI proxy HTTP server.
 func NewServer(client storageClient, cfg ServerConfig) *http.Server {
-	h := NewHandlers(client, cfg.PresignTTL)
+	maxEntries := cfg.CacheMaxEntries
+	if maxEntries == 0 {
+		maxEntries = 10000
+	}
+	cacheTTL := cfg.CacheTTL
+	if cacheTTL == 0 {
+		cacheTTL = 24 * time.Hour
+	}
+	cache := NewDigestCacheWithConfig(maxEntries, cfg.CacheDir, cacheTTL)
+	h := newHandlersWithCache(client, cache, cfg.PresignTTL)
 	h.verifier = cfg.Verifier
 
 	mux := http.NewServeMux()

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -50,10 +51,24 @@ func main() {
 		log.Printf("Signature verification enabled (key: %s)", keyRef)
 	}
 
+	cacheMaxEntries := 10000
+	if v := os.Getenv("S3LO_CACHE_MAX_ENTRIES"); v != "" {
+		if n, err2 := strconv.Atoi(v); err2 == nil && n > 0 {
+			cacheMaxEntries = n
+		}
+	}
+	cacheTTL, err2 := time.ParseDuration(envOr("S3LO_CACHE_TTL", "24h"))
+	if err2 != nil {
+		log.Fatalf("Invalid S3LO_CACHE_TTL: %v", err2)
+	}
+
 	srv := proxy.NewServer(client, proxy.ServerConfig{
-		Port:       port,
-		PresignTTL: presignTTL,
-		Verifier:   verifier,
+		Port:            port,
+		PresignTTL:      presignTTL,
+		CacheMaxEntries: cacheMaxEntries,
+		CacheDir:        os.Getenv("S3LO_CACHE_DIR"),
+		CacheTTL:        cacheTTL,
+		Verifier:        verifier,
 	})
 
 	go func() {
