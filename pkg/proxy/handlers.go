@@ -141,8 +141,15 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 
 // serveManifest writes manifest bytes with correct OCI headers. Handles HEAD (no body).
 func (h *Handlers) serveManifest(w http.ResponseWriter, r *http.Request, data []byte) {
+	ct := mediaTypeFromManifest(data)
+	if accept := r.Header.Get("Accept"); accept != "" {
+		if !acceptsMediaType(accept, ct) {
+			writeOCIError(w, http.StatusNotAcceptable, "UNSUPPORTED", "media type not accepted", ct)
+			return
+		}
+	}
 	digest := fmt.Sprintf("sha256:%x", sha256.Sum256(data))
-	w.Header().Set("Content-Type", mediaTypeFromManifest(data))
+	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
 	w.Header().Set("Docker-Content-Digest", digest)
 	w.WriteHeader(http.StatusOK)
@@ -161,6 +168,18 @@ func mediaTypeFromManifest(data []byte) string {
 		return m.MediaType
 	}
 	return "application/vnd.oci.image.manifest.v1+json"
+}
+
+// acceptsMediaType returns true if accept contains mediaType or "*/*".
+// accept may be a comma-separated list of media types (with optional params).
+func acceptsMediaType(accept, mediaType string) bool {
+	for _, part := range strings.Split(accept, ",") {
+		t := strings.TrimSpace(strings.SplitN(part, ";", 2)[0])
+		if t == "*/*" || t == mediaType {
+			return true
+		}
+	}
+	return false
 }
 
 // HandleBlob handles GET|HEAD /v2/<bucket>/<image>/blobs/<digest>

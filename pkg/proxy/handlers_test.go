@@ -445,3 +445,67 @@ func TestHandleManifest_VerificationEnabled_DigestSkipsVerify(t *testing.T) {
 		t.Errorf("status = %d, want %d; digest pull must bypass verification", rec.Code, http.StatusOK)
 	}
 }
+
+func TestHandleManifest_AcceptHeader_Matching(t *testing.T) {
+	s := newFakeStorage()
+	s.put("my-bucket", "manifests/myapp/v1.0/manifest.json", singleManifestJSON)
+	h := NewHandlers(s, time.Hour)
+
+	req := httptest.NewRequest("GET", "/v2/my-bucket/myapp/manifests/v1.0", nil)
+	req.Header.Set("Accept", "application/vnd.oci.image.manifest.v1+json, */*")
+	rec := httptest.NewRecorder()
+	h.HandleManifest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 for matching Accept", rec.Code)
+	}
+}
+
+func TestHandleManifest_AcceptHeader_WildcardAccepted(t *testing.T) {
+	s := newFakeStorage()
+	s.put("my-bucket", "manifests/myapp/v1.0/manifest.json", imageIndexJSON)
+	h := NewHandlers(s, time.Hour)
+
+	req := httptest.NewRequest("GET", "/v2/my-bucket/myapp/manifests/v1.0", nil)
+	req.Header.Set("Accept", "*/*")
+	rec := httptest.NewRecorder()
+	h.HandleManifest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 for wildcard Accept", rec.Code)
+	}
+}
+
+func TestHandleManifest_AcceptHeader_NotAcceptable(t *testing.T) {
+	s := newFakeStorage()
+	s.put("my-bucket", "manifests/myapp/v1.0/manifest.json", imageIndexJSON)
+	h := NewHandlers(s, time.Hour)
+
+	req := httptest.NewRequest("GET", "/v2/my-bucket/myapp/manifests/v1.0", nil)
+	// Client only accepts single-arch manifests, but we have an index.
+	req.Header.Set("Accept", "application/vnd.oci.image.manifest.v1+json")
+	rec := httptest.NewRecorder()
+	h.HandleManifest(rec, req)
+
+	if rec.Code != http.StatusNotAcceptable {
+		t.Errorf("status = %d, want 406 for mismatched Accept", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "UNSUPPORTED") {
+		t.Errorf("expected UNSUPPORTED in body, got: %s", rec.Body.String())
+	}
+}
+
+func TestHandleManifest_AcceptHeader_Absent_AlwaysServed(t *testing.T) {
+	s := newFakeStorage()
+	s.put("my-bucket", "manifests/myapp/v1.0/manifest.json", imageIndexJSON)
+	h := NewHandlers(s, time.Hour)
+
+	// No Accept header — must serve regardless of media type.
+	req := httptest.NewRequest("GET", "/v2/my-bucket/myapp/manifests/v1.0", nil)
+	rec := httptest.NewRecorder()
+	h.HandleManifest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 when no Accept header", rec.Code)
+	}
+}
