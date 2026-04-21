@@ -13,6 +13,7 @@ import (
 	"github.com/OuFinx/s3lo-operator/pkg/proxy"
 	"github.com/OuFinx/s3lo-operator/pkg/setup"
 	"github.com/OuFinx/s3lo/pkg/storage"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
@@ -64,6 +65,9 @@ func main() {
 		log.Fatalf("Invalid S3LO_CACHE_TTL: %v", err2)
 	}
 
+	metricsPort := envOr("S3LO_METRICS_PORT", "9090")
+	metrics := proxy.NewMetrics(prometheus.DefaultRegisterer)
+
 	srv := proxy.NewServer(client, proxy.ServerConfig{
 		Port:            port,
 		PresignTTL:      presignTTL,
@@ -71,12 +75,20 @@ func main() {
 		CacheDir:        os.Getenv("S3LO_CACHE_DIR"),
 		CacheTTL:        cacheTTL,
 		Verifier:        verifier,
+		Metrics:         metrics,
 	})
+	metricsSrv := proxy.NewMetricsServer(metricsPort)
 
 	go func() {
-		log.Printf("Starting s3lo-proxy on :%s", port)
+		log.Printf("s3lo-proxy listening on :%s", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
+			log.Fatalf("proxy server: %v", err)
+		}
+	}()
+	go func() {
+		log.Printf("metrics server listening on :%s", metricsPort)
+		if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("metrics server: %v", err)
 		}
 	}()
 
@@ -88,6 +100,7 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer shutdownCancel()
 	srv.Shutdown(shutdownCtx)
+	metricsSrv.Shutdown(shutdownCtx)
 }
 
 func envOr(key, fallback string) string {

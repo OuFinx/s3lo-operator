@@ -4,10 +4,11 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // ServerConfig holds all configuration for the OCI proxy server.
-// Metrics *Metrics field is added in Task 3 once the type is defined.
 type ServerConfig struct {
 	Port            string
 	PresignTTL      time.Duration
@@ -17,6 +18,7 @@ type ServerConfig struct {
 	S3MaxConcurrent int
 	HealthBucket    string
 	Verifier        *Verifier
+	Metrics         *Metrics // nil = no metrics
 }
 
 // newHandlersWithCache creates handlers using a pre-configured DigestCache.
@@ -41,6 +43,7 @@ func NewServer(client storageClient, cfg ServerConfig) *http.Server {
 	cache := NewDigestCacheWithConfig(maxEntries, cfg.CacheDir, cacheTTL)
 	h := newHandlersWithCache(client, cache, cfg.PresignTTL)
 	h.verifier = cfg.Verifier
+	h.metrics = cfg.Metrics
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +68,16 @@ func NewServer(client storageClient, cfg ServerConfig) *http.Server {
 
 	return &http.Server{
 		Addr:    ":" + cfg.Port,
+		Handler: mux,
+	}
+}
+
+// NewMetricsServer creates an HTTP server serving /metrics for Prometheus scraping.
+func NewMetricsServer(port string) *http.Server {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	return &http.Server{
+		Addr:    ":" + port,
 		Handler: mux,
 	}
 }

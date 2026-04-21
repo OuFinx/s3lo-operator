@@ -28,6 +28,7 @@ type Handlers struct {
 	cache      *DigestCache
 	presignTTL time.Duration
 	verifier   *Verifier // nil means verification disabled
+	metrics    *Metrics  // nil = no metrics
 }
 
 // NewHandlers creates new OCI API handlers.
@@ -57,16 +58,20 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 	// Digest ref: check cache then fall back to blobs/ (index children stored by s3lo v1.3.0+).
 	if strings.HasPrefix(ref, "sha256:") {
 		if data, ok := h.cache.GetManifest(ref); ok {
+			h.metrics.incManifest("cache")
 			h.serveManifest(w, r, data)
 			return
 		}
 		encoded := strings.TrimPrefix(ref, "sha256:")
+		h.metrics.incS3("manifest_get")
 		data, err := h.s3.GetObject(r.Context(), bucket, "blobs/sha256/"+encoded)
 		if err == nil {
 			h.cache.PutManifest(ref, data)
+			h.metrics.incManifest("s3")
 			h.serveManifest(w, r, data)
 			return
 		}
+		h.metrics.incManifest("error")
 		writeOCIError(w, http.StatusNotFound, "MANIFEST_UNKNOWN", "manifest unknown",
 			fmt.Sprintf("digest %s not in cache and not found at blobs/sha256/%s", ref, encoded))
 		return
@@ -76,26 +81,31 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 
 	// Try v1.1.0 layout: manifests/<image>/<ref>/manifest.json
 	v110Key := "manifests/" + image + "/" + ref + "/manifest.json"
+	h.metrics.incS3("manifest_get")
 	manifestData, err := h.s3.GetObject(ctx, bucket, v110Key)
 	isV110 := true
 	if err != nil {
 		if !storage.IsNotFound(err) {
 			log.Printf("S3 GetObject %s/%s: %v", bucket, v110Key, err)
+			h.metrics.incManifest("error")
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 		// Fallback to v1.0.0 layout: <image>/<ref>/manifest.json
 		isV110 = false
 		v100Key := image + "/" + ref + "/manifest.json"
+		h.metrics.incS3("manifest_get")
 		manifestData, err = h.s3.GetObject(ctx, bucket, v100Key)
 		if err != nil {
 			if storage.IsNotFound(err) {
+				h.metrics.incManifest("error")
 				writeOCIError(w, http.StatusNotFound, "MANIFEST_UNKNOWN",
 					fmt.Sprintf("image not found: s3://%s/%s:%s", bucket, image, ref),
 					fmt.Sprintf("tried s3://%s/%s and s3://%s/%s", bucket, v110Key, bucket, v100Key))
 				return
 			}
 			log.Printf("S3 GetObject %s/%s (v1.0.0): %v", bucket, image+"/"+ref+"/manifest.json", err)
+			h.metrics.incManifest("error")
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -118,12 +128,14 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 	// Signature verification — only for tag-based requests; digest pulls are follow-ups.
 	if h.verifier != nil {
 		if err := h.verifier.Check(ctx, h.s3, bucket, image, ref, manifestData); err != nil {
+			h.metrics.incManifest("error")
 			writeOCIError(w, http.StatusForbidden, "DENIED",
 				"image not permitted: invalid or missing signature", err.Error())
 			return
 		}
 	}
 
+	h.metrics.incManifest("s3")
 	h.serveManifest(w, r, manifestData)
 }
 
@@ -171,9 +183,11 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 	key := "blobs/sha256/" + encoded
 
 	// Check v1.1.0 global blob path.
+	h.metrics.incS3("blob_head")
 	exists, err := h.s3.HeadObjectExists(ctx, fetchBucket, key)
 	if err != nil {
 		log.Printf("HeadObject %s/%s: %v", fetchBucket, key, err)
+		h.metrics.incBlob("error")
 		writeOCIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "storage error", "")
 		return
 	}
@@ -189,9 +203,11 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 		}
 		fetchBucket = loc.Bucket
 		key = loc.Key
+		h.metrics.incS3("blob_head")
 		exists, err = h.s3.HeadObjectExists(ctx, fetchBucket, key)
 		if err != nil {
 			log.Printf("HeadObject (v1.0.0 fallback) %s/%s: %v", fetchBucket, key, err)
+			h.metrics.incBlob("error")
 			writeOCIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "storage error", "")
 			return
 		}
@@ -208,12 +224,15 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Presign redirect — containerd follows 307 natively; no data passes through the proxy.
+	h.metrics.incS3("blob_presign")
 	url, err := h.s3.PresignGetObject(ctx, fetchBucket, key, h.presignTTL)
 	if err != nil {
 		log.Printf("PresignGetObject %s/%s: %v", fetchBucket, key, err)
+		h.metrics.incBlob("error")
 		writeOCIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "presign failed", "")
 		return
 	}
+	h.metrics.incBlob("redirect")
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
