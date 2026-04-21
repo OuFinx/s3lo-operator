@@ -31,4 +31,6 @@ jobs:
         run: helm package deploy/helm/s3lo-operator --destination /tmp/helm
 
       - name: Push chart to GHCR
-        run: helm push /tmp/helm/s3lo-operator-${{ steps.chart.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner }}
+        run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          helm push /tmp/helm/s3lo-operator-${{ steps.chart.outputs.version }}.tgz oci://ghcr.io/${owner}
