@@ -46,6 +46,7 @@ func NewServer(client storageClient, cfg ServerConfig) *http.Server {
 	h.verifier = cfg.Verifier
 	h.metrics = cfg.Metrics
 	h.sem = newSemaphore(cfg.S3MaxConcurrent)
+	h.healthBucket = cfg.HealthBucket
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +67,7 @@ func NewServer(client storageClient, cfg ServerConfig) *http.Server {
 		}
 	})
 	mux.HandleFunc("/healthz", h.HandleHealth)
-	mux.HandleFunc("/readyz", h.HandleHealth)
+	mux.HandleFunc("/readyz", h.HandleReadyz)
 
 	return &http.Server{
 		Addr:    ":" + cfg.Port,

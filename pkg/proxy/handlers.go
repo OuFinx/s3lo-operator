@@ -52,12 +52,13 @@ func (s semaphore) release() {
 
 // Handlers implements OCI Distribution API endpoints backed by S3.
 type Handlers struct {
-	s3         storageClient
-	cache      *DigestCache
-	presignTTL time.Duration
-	verifier   *Verifier  // nil means verification disabled
-	metrics    *Metrics   // nil = no metrics
-	sem        semaphore  // nil = no rate limit
+	s3           storageClient
+	cache        *DigestCache
+	presignTTL   time.Duration
+	verifier     *Verifier  // nil means verification disabled
+	metrics      *Metrics   // nil = no metrics
+	sem          semaphore  // nil = no rate limit
+	healthBucket string     // "" = no S3 readiness check
 }
 
 // NewHandlers creates new OCI API handlers.
@@ -305,6 +306,28 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 
 // HandleHealth handles GET /healthz and /readyz
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
+
+// HandleReadyz handles GET /readyz.
+// If healthBucket is set, checks S3 connectivity via a HEAD request with a 5s timeout.
+// Returns 200 if reachable (key may or may not exist), 503 on S3 error.
+func (h *Handlers) HandleReadyz(w http.ResponseWriter, r *http.Request) {
+	if h.healthBucket == "" {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	_, err := h.s3.HeadObjectExists(ctx, h.healthBucket, "s3lo-health-check")
+	if err != nil {
+		log.Printf("readyz S3 check failed: %v", err)
+		http.Error(w, "S3 unreachable", http.StatusServiceUnavailable)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }

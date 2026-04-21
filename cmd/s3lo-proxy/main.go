@@ -83,6 +83,7 @@ func main() {
 		CacheDir:        os.Getenv("S3LO_CACHE_DIR"),
 		CacheTTL:        cacheTTL,
 		S3MaxConcurrent: s3MaxConcurrent,
+		HealthBucket:    os.Getenv("S3LO_HEALTH_BUCKET"),
 		Verifier:        verifier,
 		Metrics:         metrics,
 	})

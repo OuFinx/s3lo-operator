@@ -589,3 +589,51 @@ func TestHandleManifest_DigestRateLimitExceeded(t *testing.T) {
 		t.Errorf("status = %d, want 503 for digest ref when semaphore full", rec.Code)
 	}
 }
+
+// failStorage is a storageClient that always returns errors.
+type failStorage struct{}
+
+func (f *failStorage) GetObject(_ context.Context, _, _ string) ([]byte, error) {
+	return nil, fmt.Errorf("storage unavailable")
+}
+func (f *failStorage) HeadObjectExists(_ context.Context, _, _ string) (bool, error) {
+	return false, fmt.Errorf("storage unavailable")
+}
+func (f *failStorage) PresignGetObject(_ context.Context, _, _ string, _ time.Duration) (string, error) {
+	return "", fmt.Errorf("storage unavailable")
+}
+
+func TestHandleReadyz_NoHealthBucket_ReturnsOK(t *testing.T) {
+	h := NewHandlers(newFakeStorage(), time.Hour)
+	// healthBucket is empty — no S3 check.
+	req := httptest.NewRequest("GET", "/readyz", nil)
+	rec := httptest.NewRecorder()
+	h.HandleReadyz(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestHandleReadyz_HealthBucket_S3Reachable(t *testing.T) {
+	s := newFakeStorage()
+	h := NewHandlers(s, time.Hour)
+	h.healthBucket = "my-bucket"
+	// HeadObjectExists returns (false, nil) for missing key — S3 is reachable.
+	req := httptest.NewRequest("GET", "/readyz", nil)
+	rec := httptest.NewRecorder()
+	h.HandleReadyz(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 (S3 reachable even if health-check key missing)", rec.Code)
+	}
+}
+
+func TestHandleReadyz_HealthBucket_S3Error(t *testing.T) {
+	h := NewHandlers(&failStorage{}, time.Hour)
+	h.healthBucket = "my-bucket"
+	req := httptest.NewRequest("GET", "/readyz", nil)
+	rec := httptest.NewRecorder()
+	h.HandleReadyz(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 on S3 error", rec.Code)
+	}
+}
