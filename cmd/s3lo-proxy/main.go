@@ -65,6 +65,13 @@ func main() {
 		log.Fatalf("Invalid S3LO_CACHE_TTL: %v", err2)
 	}
 
+	s3MaxConcurrent := 20
+	if v := os.Getenv("S3LO_S3_MAX_CONCURRENT"); v != "" {
+		if n, err2 := strconv.Atoi(v); err2 == nil && n > 0 {
+			s3MaxConcurrent = n
+		}
+	}
+
 	metricsPort := envOr("S3LO_METRICS_PORT", "9090")
 	reg := prometheus.NewRegistry()
 	metrics := proxy.NewMetrics(reg)
@@ -75,6 +82,7 @@ func main() {
 		CacheMaxEntries: cacheMaxEntries,
 		CacheDir:        os.Getenv("S3LO_CACHE_DIR"),
 		CacheTTL:        cacheTTL,
+		S3MaxConcurrent: s3MaxConcurrent,
 		Verifier:        verifier,
 		Metrics:         metrics,
 	})

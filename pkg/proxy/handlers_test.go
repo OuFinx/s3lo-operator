@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+
 // fakeStorage is an in-memory storageClient for tests.
 type fakeStorage struct {
 	objects    map[string][]byte
@@ -507,5 +508,59 @@ func TestHandleManifest_AcceptHeader_Absent_AlwaysServed(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200 when no Accept header", rec.Code)
+	}
+}
+
+func TestSemaphore_AcquireRelease(t *testing.T) {
+	s := newSemaphore(1)
+	ctx := context.Background()
+
+	if err := s.acquire(ctx); err != nil {
+		t.Fatalf("first acquire failed: %v", err)
+	}
+
+	cancelCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { done <- s.acquire(cancelCtx) }()
+
+	cancel()
+	if err := <-done; err == nil {
+		t.Fatal("expected context cancellation error on blocked acquire")
+	}
+
+	s.release()
+}
+
+func TestSemaphore_Nil_NoOp(t *testing.T) {
+	s := newSemaphore(0) // 0 → nil semaphore
+	ctx := context.Background()
+	if err := s.acquire(ctx); err != nil {
+		t.Fatalf("nil semaphore acquire must be no-op: %v", err)
+	}
+	s.release() // must not panic
+}
+
+func TestHandleManifest_RateLimitExceeded(t *testing.T) {
+	s := newFakeStorage()
+	s.put("my-bucket", "manifests/myapp/v1.0/manifest.json", singleManifestJSON)
+	h := NewHandlers(s, time.Hour)
+	h.sem = newSemaphore(1)
+
+	// Fill the semaphore.
+	if err := h.sem.acquire(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer h.sem.release()
+
+	// Handler should fail immediately because context is already cancelled.
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before the request
+	req := httptest.NewRequest("GET", "/v2/my-bucket/myapp/manifests/v1.0", nil)
+	req = req.WithContext(cancelCtx)
+	rec := httptest.NewRecorder()
+	h.HandleManifest(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 when semaphore full", rec.Code)
 	}
 }

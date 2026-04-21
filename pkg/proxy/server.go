@@ -45,6 +45,7 @@ func NewServer(client storageClient, cfg ServerConfig) *http.Server {
 	h := newHandlersWithCache(client, cache, cfg.PresignTTL)
 	h.verifier = cfg.Verifier
 	h.metrics = cfg.Metrics
+	h.sem = newSemaphore(cfg.S3MaxConcurrent)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {

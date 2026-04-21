@@ -22,13 +22,42 @@ type storageClient interface {
 	PresignGetObject(ctx context.Context, bucket, key string, ttl time.Duration) (string, error)
 }
 
+// semaphore limits concurrent S3 API calls. A nil semaphore is a no-op.
+type semaphore chan struct{}
+
+func newSemaphore(n int) semaphore {
+	if n <= 0 {
+		return nil
+	}
+	return make(semaphore, n)
+}
+
+func (s semaphore) acquire(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	select {
+	case s <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s semaphore) release() {
+	if s != nil {
+		<-s
+	}
+}
+
 // Handlers implements OCI Distribution API endpoints backed by S3.
 type Handlers struct {
 	s3         storageClient
 	cache      *DigestCache
 	presignTTL time.Duration
-	verifier   *Verifier // nil means verification disabled
-	metrics    *Metrics  // nil = no metrics
+	verifier   *Verifier  // nil means verification disabled
+	metrics    *Metrics   // nil = no metrics
+	sem        semaphore  // nil = no rate limit
 }
 
 // NewHandlers creates new OCI API handlers.
@@ -78,6 +107,12 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	if err := h.sem.acquire(ctx); err != nil {
+		writeOCIError(w, http.StatusServiceUnavailable, "UNAVAILABLE", "rate limited", "")
+		return
+	}
+	defer h.sem.release()
 
 	// Try v1.1.0 layout: manifests/<image>/<ref>/manifest.json
 	v110Key := "manifests/" + image + "/" + ref + "/manifest.json"
@@ -201,6 +236,12 @@ func (h *Handlers) HandleBlob(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	fetchBucket := bucket
 	key := "blobs/sha256/" + encoded
+
+	if err := h.sem.acquire(ctx); err != nil {
+		writeOCIError(w, http.StatusServiceUnavailable, "UNAVAILABLE", "rate limited", "")
+		return
+	}
+	defer h.sem.release()
 
 	// Check v1.1.0 global blob path.
 	h.metrics.incS3("blob_head")
