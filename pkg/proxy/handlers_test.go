@@ -603,6 +603,36 @@ func (f *failStorage) PresignGetObject(_ context.Context, _, _ string, _ time.Du
 	return "", fmt.Errorf("storage unavailable")
 }
 
+// blockingStorage blocks until context is cancelled.
+type blockingStorage struct{}
+
+func (b *blockingStorage) GetObject(ctx context.Context, _, _ string) ([]byte, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+func (b *blockingStorage) HeadObjectExists(ctx context.Context, _, _ string) (bool, error) {
+	<-ctx.Done()
+	return false, ctx.Err()
+}
+func (b *blockingStorage) PresignGetObject(ctx context.Context, _, _ string, _ time.Duration) (string, error) {
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func TestHandleReadyz_HealthBucket_S3Timeout(t *testing.T) {
+	h := NewHandlers(&blockingStorage{}, time.Hour)
+	h.healthBucket = "my-bucket"
+	// Use a cancelled context so the test is instantaneous.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest("GET", "/readyz", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleReadyz(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 on S3 timeout/cancel", rec.Code)
+	}
+}
+
 func TestHandleReadyz_NoHealthBucket_ReturnsOK(t *testing.T) {
 	h := NewHandlers(newFakeStorage(), time.Hour)
 	// healthBucket is empty — no S3 check.
