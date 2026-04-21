@@ -50,7 +50,11 @@ func main() {
 		log.Printf("Signature verification enabled (key: %s)", keyRef)
 	}
 
-	srv := proxy.NewServer(client, port, presignTTL, verifier)
+	srv := proxy.NewServer(client, proxy.ServerConfig{
+		Port:       port,
+		PresignTTL: presignTTL,
+		Verifier:   verifier,
+	})
 
 	go func() {
 		log.Printf("Starting s3lo-proxy on :%s", port)

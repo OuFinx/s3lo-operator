@@ -8,7 +8,7 @@ import (
 )
 
 func TestServerRouting(t *testing.T) {
-	srv := NewServer(nil, "5732", time.Hour, nil)
+	srv := NewServer(nil, ServerConfig{Port: "5732", PresignTTL: time.Hour})
 
 	tests := []struct {
 		method string
@@ -26,7 +26,6 @@ func TestServerRouting(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			rec := httptest.NewRecorder()
 			srv.Handler.ServeHTTP(rec, req)
-
 			if rec.Code != tt.want {
 				t.Errorf("status = %d, want %d", rec.Code, tt.want)
 			}
