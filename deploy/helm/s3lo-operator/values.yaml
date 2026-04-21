@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/oufinx/s3lo-operator
-  tag: "1.1.0"
+  tag: "1.3.0"
   pullPolicy: IfNotPresent
 
 proxy:
@@ -29,3 +29,24 @@ resources:
 
 nodeSelector: {}
 tolerations: []
+
+metrics:
+  enabled: true
+  port: 9090       # S3LO_METRICS_PORT
+
+cache:
+  maxEntries: 10000  # S3LO_CACHE_MAX_ENTRIES
+  dir: ""            # S3LO_CACHE_DIR (empty = in-memory only)
+  ttl: "24h"         # S3LO_CACHE_TTL
+
+rateLimit:
+  s3MaxConcurrent: 20  # S3LO_S3_MAX_CONCURRENT
+
+readiness:
+  healthBucket: ""   # S3LO_HEALTH_BUCKET (empty = no S3 check)
+
+storage:
+  endpoint: ""       # AWS_ENDPOINT_URL (empty = AWS default)
+  region: ""         # AWS_REGION (empty = AWS default)
+  credentialsSecret:
+    name: ""         # K8s Secret with keys AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY

@@ -9,30 +9,20 @@
 ## v1.2.0 — Multi-Architecture Images ✓
 
 - [x] Serve OCI Image Index for multi-arch images
-- [ ] Handle Accept header for manifest content negotiation
+- [x] Handle Accept header for manifest content negotiation
 
-## v1.3.0 — Pull-Through Cache
+## v1.3.0 — Pull-Through Cache + Observability + Distribution ✓
 
-- [ ] Local disk cache for blobs
-- [ ] Local disk cache for manifests
-- [ ] LRU eviction for disk cache
-- [ ] Cache hit/miss metrics
-- [ ] Rate limiting for S3 requests
-- [ ] Update Helm chart for cache volume and metrics
-
-## v1.4.0 — Observability
-
-- [ ] Prometheus metrics endpoint
-- [ ] Readiness probe checks S3 connectivity
-
-## v1.5.0 — Distribution
-
-- [ ] Publish Helm chart to GHCR as OCI artifact
+- [x] Local disk cache for manifests
+- [x] FIFO eviction for manifest cache
+- [x] Cache hit/miss/error metrics
+- [x] Prometheus metrics endpoint (`/metrics` on port 9090)
+- [x] Rate limiting for S3 requests (`S3LO_S3_MAX_CONCURRENT`)
+- [x] Readiness probe checks S3 connectivity (`S3LO_HEALTH_BUCKET`)
+- [x] Support non-EKS Kubernetes clusters (GKE, AKS, k3s, Minio, Ceph)
+- [x] Update Helm chart for all new features
+- [x] Publish Helm chart to GHCR as OCI artifact
 
 ## v2.0.0 — Security ✓
 
 - [x] Verify image signatures before serving
-
-## v2.1.0 — Multi-Platform Kubernetes
-
-- [ ] Support non-EKS Kubernetes clusters (GKE, AKS, k3s)
