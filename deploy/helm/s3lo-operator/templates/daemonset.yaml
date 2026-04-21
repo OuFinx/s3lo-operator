@@ -36,10 +36,43 @@ spec:
             - name: S3LO_KEY_REF
               value: {{ .Values.signing.keyRef | quote }}
             {{- end }}
+            - name: S3LO_METRICS_PORT
+              value: {{ .Values.metrics.port | quote }}
+            - name: S3LO_CACHE_MAX_ENTRIES
+              value: {{ .Values.cache.maxEntries | quote }}
+            - name: S3LO_CACHE_TTL
+              value: {{ .Values.cache.ttl | quote }}
+            - name: S3LO_S3_MAX_CONCURRENT
+              value: {{ .Values.rateLimit.s3MaxConcurrent | quote }}
+            {{- if .Values.cache.dir }}
+            - name: S3LO_CACHE_DIR
+              value: {{ .Values.cache.dir | quote }}
+            {{- end }}
+            {{- if .Values.readiness.healthBucket }}
+            - name: S3LO_HEALTH_BUCKET
+              value: {{ .Values.readiness.healthBucket | quote }}
+            {{- end }}
+            {{- if .Values.storage.endpoint }}
+            - name: AWS_ENDPOINT_URL
+              value: {{ .Values.storage.endpoint | quote }}
+            {{- end }}
+            {{- if .Values.storage.region }}
+            - name: AWS_REGION
+              value: {{ .Values.storage.region | quote }}
+            {{- end }}
+          {{- if .Values.storage.credentialsSecret.name }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.storage.credentialsSecret.name }}
+          {{- end }}
           ports:
             - containerPort: {{ .Values.proxy.port }}
               hostPort: {{ .Values.proxy.port }}
               protocol: TCP
+            {{- if .Values.metrics.enabled }}
+            - containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
