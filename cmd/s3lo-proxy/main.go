@@ -51,11 +51,13 @@ func main() {
 		log.Printf("Signature verification enabled (key: %s)", keyRef)
 	}
 
-	cacheMaxEntries := 10000
+	var cacheMaxEntries int
 	if v := os.Getenv("S3LO_CACHE_MAX_ENTRIES"); v != "" {
-		if n, err2 := strconv.Atoi(v); err2 == nil && n > 0 {
-			cacheMaxEntries = n
+		n, err2 := strconv.Atoi(v)
+		if err2 != nil || n <= 0 {
+			log.Fatalf("invalid S3LO_CACHE_MAX_ENTRIES: %q", v)
 		}
+		cacheMaxEntries = n
 	}
 	cacheTTL, err2 := time.ParseDuration(envOr("S3LO_CACHE_TTL", "24h"))
 	if err2 != nil {
